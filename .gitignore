@@ -1,0 +1,11 @@
+# 운영체제(OS) 생성 임시 파일
+.DS_Store
+Thumbs.db
+
+# 코드 에디터(VS Code, WebStorm 등) 개인 설정
+.vscode/
+.idea/
+
+# 로그 및 환경변수 (예방용)
+*.log
+.env
