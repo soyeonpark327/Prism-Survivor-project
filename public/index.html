@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>똥 피하기</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%; width: 100%;
+    background: #222;
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #stage {
+    position: relative;
+    width: min(96vw, 96vh * (960 / 610));
+    aspect-ratio: 960 / 610;
+    image-rendering: pixelated;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    border: 4px solid #4a3a2c;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  }
+
+  #hud {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    z-index: 5;
+  }
+  #hud img { width: 32px; height: 32px; filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5)); transition: opacity .15s, filter .15s; }
+  #hud img.empty { opacity: 0.25; filter: grayscale(1); }
+
+  #topRight {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 20;
+  }
+  #muteBtn {
+    width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.35);
+    color: #fff;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #muteBtn:active { transform: translateY(1px); }
+  #scoreBox {
+    color: #fff;
+    background: rgba(0,0,0,0.35);
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px #000;
+    white-space: nowrap;
+  }
+
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,10,20,0.72);
+    color: #fff;
+    text-align: center;
+    z-index: 10;
+    border-radius: 6px;
+    gap: 16px;
+    padding: 20px;
+  }
+  .overlay.hidden { display: none; }
+  .overlay img { width: 140px; image-rendering: pixelated; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); }
+  .overlay h1 { margin: 0; font-size: 34px; text-shadow: 2px 2px 4px #000; }
+  .overlay p { margin: 0; font-size: 16px; opacity: 0.9; line-height: 1.6; }
+  .overlay button {
+    margin-top: 6px;
+    padding: 12px 28px;
+    font-size: 18px;
+    font-weight: bold;
+    border: none;
+    border-radius: 30px;
+    background: linear-gradient(180deg,#ffd35c,#f4a627);
+    color: #4a2a00;
+    cursor: pointer;
+    box-shadow: 0 4px 0 #a86b0f;
+  }
+  .overlay button:active { transform: translateY(2px); box-shadow: 0 2px 0 #a86b0f; }
+  .overlay button.secondary {
+    background: linear-gradient(180deg,#6ec2ff,#3d8fe0);
+    color: #fff;
+    box-shadow: 0 4px 0 #2a63a0;
+  }
+  .overlay button.secondary:active { box-shadow: 0 2px 0 #2a63a0; }
+  .overlay .btnRow { display: flex; gap: 12px; }
+
+  #nicknameInput {
+    width: 220px;
+    padding: 10px 14px;
+    font-size: 16px;
+    text-align: center;
+    border: none;
+    border-radius: 20px;
+    outline: none;
+  }
+  #nicknameInput.shake { animation: shake 0.4s; }
+  @keyframes shake {
+    10%, 90% { transform: translateX(-2px); }
+    20%, 80% { transform: translateX(4px); }
+    30%, 50%, 70% { transform: translateX(-8px); }
+    40%, 60% { transform: translateX(8px); }
+  }
+  #nicknameWarning {
+    display: none;
+    color: #ff8080;
+    font-size: 13px;
+    margin: -8px 0 0;
+  }
+
+  .hof-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: 320px;
+    max-height: 220px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .hof-item, .hof-empty {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 14px;
+    text-align: left;
+  }
+  .hof-empty { justify-content: center; opacity: 0.7; }
+  .hof-item.me { background: rgba(255,211,92,0.35); box-shadow: 0 0 0 2px #f4a627 inset; }
+  .hof-rank { width: 34px; flex-shrink: 0; opacity: 0.8; }
+  .hof-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hof-hearts { display: flex; gap: 1px; flex-shrink: 0; }
+  .hof-hearts img { width: 16px; height: 16px; }
+  .hof-hearts img.empty { opacity: 0.25; filter: grayscale(1); }
+
+  .hof-item.rank-1 .hof-rank, .hof-item.rank-1 .hof-name {
+    color: #ffd700; font-weight: bold; text-shadow: 0 0 6px rgba(255,215,0,0.65);
+  }
+  .hof-item.rank-2 .hof-rank, .hof-item.rank-2 .hof-name {
+    color: #e2e2e2; font-weight: bold; text-shadow: 0 0 6px rgba(220,220,220,0.5);
+  }
+  .hof-item.rank-3 .hof-rank, .hof-item.rank-3 .hof-name {
+    color: #cd8a4d; font-weight: bold; text-shadow: 0 0 6px rgba(205,138,77,0.55);
+  }
+
+  .hof-pinned {
+    max-height: none;
+    overflow: visible;
+    width: 320px;
+  }
+  .hof-pinned.hidden { display: none; }
+  .hof-pinned .hof-item {
+    background: rgba(255,60,60,0.25);
+    box-shadow: 0 0 0 2px #ff4d4d inset;
+  }
+
+  #touchControls {
+    position: absolute;
+    bottom: 16px;
+    left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    padding: 0 20px;
+    z-index: 6;
+    pointer-events: none;
+  }
+  #touchControls button {
+    pointer-events: auto;
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255,255,255,0.35);
+    font-size: 26px;
+    color: #fff;
+    user-select: none;
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="game" width="960" height="610"></canvas>
+
+  <div id="hud"></div>
+  <div id="topRight">
+    <button id="muteBtn" aria-label="음소거 켜기/끄기" title="음소거">🔊</button>
+    <div id="scoreBox">시간: 0.0s</div>
+  </div>
+
+  <div id="touchControls">
+    <button id="btnLeft">◀</button>
+    <button id="btnRight">▶</button>
+  </div>
+
+  <div class="overlay" id="startScreen">
+    <h1>💩 똥 피하기 💩</h1>
+    <p>
+      화살표(←/→) 또는 A/D로 이동하세요.<br>
+      갈색 똥에 맞으면 체력이 줄고, 컬러 똥을 먹으면 체력이 늘어납니다.<br>
+      <b id="winTimeLabel">60</b>초를 버티면 승리!
+    </p>
+    <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="10" autocomplete="off">
+    <p id="nicknameWarning">닉네임을 입력해주세요!</p>
+    <div class="btnRow">
+      <button id="startBtn">게임 시작</button>
+      <button id="hofBtn" class="secondary">🏆 명예의 전당</button>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="loseScreen">
+    <h1>게임 오버</h1>
+    <img src="cutout/플레이어(die).png" alt="die">
+    <p id="loseTime"></p>
+    <button id="retryBtnLose">다시 시작</button>
+  </div>
+
+  <div class="overlay hidden" id="winScreen">
+    <h1>승리!</h1>
+    <img src="cutout/플레이어(승리).png" alt="win">
+    <p id="winSummary">버텨냈다!</p>
+    <p id="winRankLine" style="font-size:13px; opacity:0.8; margin-top:-10px;"></p>
+    <ol class="hof-list" id="winHofList"></ol>
+    <ul class="hof-list hof-pinned hidden" id="winHofPinned"></ul>
+    <button id="retryBtnWin">다시 시작</button>
+  </div>
+
+  <div class="overlay hidden" id="hofScreen">
+    <h1>🏆 명예의 전당</h1>
+    <ol class="hof-list" id="hofList"></ol>
+    <button id="hofBackBtn">돌아가기</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const WIN_TIME = 60; // seconds to survive for victory
+  const MAX_HP = 5;
+
+  const imgNames = {
+    bg: '배경.png',
+    idle: 'cutout/플레이어(기본).png',
+    left: 'cutout/플레이어(왼쪽이동).png',
+    right: 'cutout/플레이어(오른쪽이동).png',
+    die: 'cutout/플레이어(die).png',
+    win: 'cutout/플레이어(승리).png',
+    obstacle: 'cutout/장애물(갈똥).png',
+    heal: 'cutout/회복아이템(칼라똥).png',
+    heart: 'cutout/피(체력).png',
+  };
+
+  const images = {};
+  let loadedCount = 0;
+  const total = Object.keys(imgNames).length;
+
+  function loadImages(cb) {
+    for (const key in imgNames) {
+      const img = new Image();
+      img.onload = () => { loadedCount++; if (loadedCount === total) cb(); };
+      img.onerror = () => { loadedCount++; if (loadedCount === total) cb(); };
+      img.src = imgNames[key];
+      images[key] = img;
+    }
+  }
+
+  // ---- 오디오: 배경음악 + 효과음 (Web Audio API로 직접 합성, 외부 파일 불필요) ----
+  let audioCtx = null;
+  let masterGain = null;
+  let musicGain = null;
+  let muted = false;
+  let bgmPlaying = false;
+  let nextLoopTime = 0;
+  let bgmSchedulerTimer = null;
+
+  function ensureAudio() {
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return;
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = muted ? 0 : 1;
+    masterGain.connect(audioCtx.destination);
+
+    musicGain = audioCtx.createGain();
+    musicGain.gain.value = 1;
+    const musicFilter = audioCtx.createBiquadFilter();
+    musicFilter.type = 'lowpass';
+    musicFilter.frequency.value = 2600;
+    musicFilter.Q.value = 0.5;
+    musicGain.connect(musicFilter);
+    musicFilter.connect(masterGain);
+  }
+
+  function playNote(dest, freq, time, duration, type, vol, attack, pan) {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, time);
+    g.gain.setValueAtTime(0, time);
+    g.gain.linearRampToValueAtTime(vol, time + (attack || 0.012));
+    g.gain.exponentialRampToValueAtTime(0.0001, time + duration);
+    let outNode = g;
+    if (pan !== undefined && audioCtx.createStereoPanner) {
+      const p = audioCtx.createStereoPanner();
+      p.pan.value = pan;
+      g.connect(p);
+      outNode = p;
+    }
+    osc.connect(g);
+    outNode.connect(dest);
+    osc.start(time);
+    osc.stop(time + duration + 0.05);
+  }
+
+  // 잔잔하고 듣기 편한 뮤직박스풍 루프: 사인/삼각파 위주, I-V-vi-IV 진행
+  // (C - G - Am - F), 부드러운 멜로디 + 은은한 코드 패드 + 낮은 베이스.
+  const BPM = 96;
+  const QUARTER = 60 / BPM;
+
+  // [주파수, 길이(4분음표 단위)]
+  const BGM_LEAD = [
+    [329.63, 1], [392.00, 1], [329.63, 1], [261.63, 1],   // E4 G4 E4 C4   (C)
+    [293.66, 1], [392.00, 1], [349.23, 1], [293.66, 1],   // D4 G4 F4 D4   (G)
+    [523.25, 1], [493.88, 1], [440.00, 1], [329.63, 1],   // C5 B4 A4 E4   (Am)
+    [349.23, 1], [329.63, 1], [293.66, 2],                // F4 E4 D4(2박) (F)
+  ];
+  const BGM_BASS = [
+    [130.81, 4], [98.00, 4], [110.00, 4], [87.31, 4],       // C3 G2 A2 F2
+  ];
+  const BGM_PAD = [
+    [329.63, 4], [246.94, 4], [261.63, 4], [220.00, 4],     // E4 B3 C4 A3 (코드의 3음, 은은한 화음)
+  ];
+  const BGM_LOOP_SECONDS = 16 * QUARTER;
+
+  function scheduleBgmLoop(startTime) {
+    let t = startTime;
+    BGM_LEAD.forEach(([freq, dur], i) => {
+      const d = dur * QUARTER;
+      playNote(musicGain, freq, t, d * 0.92, 'triangle', 0.075, 0.02, (i % 2 === 0) ? -0.15 : 0.15);
+      t += d;
+    });
+    let tb = startTime;
+    for (const [freq, dur] of BGM_BASS) {
+      const d = dur * QUARTER;
+      playNote(musicGain, freq, tb, d * 0.95, 'sine', 0.06, 0.03);
+      tb += d;
+    }
+    let tp = startTime;
+    for (const [freq, dur] of BGM_PAD) {
+      const d = dur * QUARTER;
+      playNote(musicGain, freq, tp, d * 0.98, 'sine', 0.025, 0.25);
+      tp += d;
+    }
+  }
+
+  function bgmScheduler() {
+    if (!bgmPlaying) return;
+    while (nextLoopTime < audioCtx.currentTime + 0.5) {
+      scheduleBgmLoop(nextLoopTime);
+      nextLoopTime += BGM_LOOP_SECONDS;
+    }
+    bgmSchedulerTimer = setTimeout(bgmScheduler, 150);
+  }
+
+  function startBgm() {
+    ensureAudio();
+    if (bgmPlaying) return;
+    bgmPlaying = true;
+    nextLoopTime = audioCtx.currentTime + 0.1;
+    bgmScheduler();
+  }
+
+  // ---- 효과음: 장애물 "드헉!" / 회복 "예~" ----
+  let koreanVoice = null;
+  function pickKoreanVoice() {
+    if (!('speechSynthesis' in window)) return;
+    const voices = speechSynthesis.getVoices();
+    koreanVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko')) || null;
+  }
+  if ('speechSynthesis' in window) {
+    pickKoreanVoice();
+    speechSynthesis.onvoiceschanged = pickKoreanVoice;
+  }
+
+  function speak(text, { pitch = 1.1, rate = 1.15, volume = 1 } = {}) {
+    if (muted || !('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel(); // 겹쳐서 밀리지 않도록 이전 발화는 취소
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      if (koreanVoice) u.voice = koreanVoice;
+      u.pitch = pitch;
+      u.rate = rate;
+      u.volume = volume;
+      speechSynthesis.speak(u);
+    } catch (e) { /* 음성 합성 미지원 환경은 무시 */ }
+  }
+
+  function playHitSfx() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(300, t);
+    osc.frequency.exponentialRampToValueAtTime(80, t + 0.18);
+    g.gain.setValueAtTime(0.3, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    osc.connect(g).connect(masterGain);
+    osc.start(t);
+    osc.stop(t + 0.22);
+    speak('드헉!', { pitch: 0.75, rate: 1.35 });
+  }
+
+  function playHealSfx() {
+    ensureAudio();
+    const t = audioCtx.currentTime;
+    [523.25, 659.25, 783.99].forEach((f, i) => {
+      playNote(masterGain, f, t + i * 0.07, 0.16, 'triangle', 0.25);
+    });
+    speak('예~', { pitch: 1.7, rate: 1.05 });
+  }
+
+  function setMuted(val) {
+    muted = val;
+    if (masterGain) masterGain.gain.value = muted ? 0 : 1;
+    if (muted && 'speechSynthesis' in window) speechSynthesis.cancel();
+    document.getElementById('muteBtn').textContent = muted ? '🔇' : '🔊';
+  }
+
+  let audioUnlocked = false;
+  function unlockAudio() {
+    if (audioUnlocked) return;
+    audioUnlocked = true;
+    ensureAudio();
+    startBgm();
+  }
+  window.addEventListener('pointerdown', unlockAudio, { once: true });
+  window.addEventListener('keydown', unlockAudio, { once: true });
+
+  // ---- HUD hearts ----
+  const hud = document.getElementById('hud');
+  const heartEls = [];
+  for (let i = 0; i < MAX_HP; i++) {
+    const im = document.createElement('img');
+    im.src = imgNames.heart;
+    hud.appendChild(im);
+    heartEls.push(im);
+  }
+  function renderHearts(hp) {
+    heartEls.forEach((el, i) => {
+      el.classList.toggle('empty', i >= hp);
+    });
+  }
+
+  document.getElementById('winTimeLabel').textContent = WIN_TIME;
+
+  // ---- 명예의 전당 (hall of fame) ----
+  // 이 배포판(Render + Express 서버)에서는 실제 서버의 /api/leaderboard 를 통해
+  // 모든 방문자가 같은 순위표를 공유한다. 네트워크 문제 등으로 서버 요청이
+  // 실패하면 이 브라우저의 localStorage에만 저장하는 방식으로 조용히 대체된다.
+  const LB_KEY = 'poopDodge_hallOfFame';
+  const LB_API = '/api/leaderboard';
+  let currentNickname = '';
+
+  function loadLeaderboard() {
+    try {
+      const raw = localStorage.getItem(LB_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveLeaderboard(list) {
+    try { localStorage.setItem(LB_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+  }
+
+  const HOF_STORAGE_CAP = 500; // 저장 상한 (사실상 전체 기록 보존용 안전장치)
+  const HOF_TOP_CUTOFF = 10;   // 이 등수 안에 들면 목록 안에서만 강조, 밖이면 하단에 고정 표시
+
+  function sortAndCap(list) {
+    list.sort((a, b) => {
+      if (b.hp !== a.hp) return b.hp - a.hp;
+      return a.date - b.date;
+    });
+    return list.slice(0, HOF_STORAGE_CAP);
+  }
+
+  async function loadLeaderboardAsync() {
+    try {
+      const res = await fetch(LB_API, { cache: 'no-store' });
+      if (res.ok) return await res.json();
+    } catch (e) { /* 서버 요청 실패 -> 로컬로 폴백 */ }
+    return loadLeaderboard();
+  }
+
+  // 서버에 등록 시도 -> 성공하면 {list, id}(서버가 부여한 id)를 반환.
+  // 실패하면 이 브라우저의 localStorage에만 저장하고 클라이언트가 만든 id를 쓴다.
+  async function addToLeaderboard(entry) {
+    try {
+      const res = await fetch(LB_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: entry.name, hp: entry.hp }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return { list: data.list, id: data.id };
+      }
+    } catch (e) { /* 서버 요청 실패 -> 로컬로 폴백 */ }
+    const localList = sortAndCap([...loadLeaderboard(), entry]);
+    saveLeaderboard(localList);
+    return { list: localList, id: entry.id };
+  }
+
+  function medalClass(rank) {
+    if (rank === 1) return ' rank-1';
+    if (rank === 2) return ' rank-2';
+    if (rank === 3) return ' rank-3';
+    return '';
+  }
+
+  function buildHofRow(entry, rank, isMe) {
+    const li = document.createElement('li');
+    li.className = 'hof-item' + medalClass(rank) + (isMe ? ' me' : '');
+
+    const rankEl = document.createElement('span');
+    rankEl.className = 'hof-rank';
+    rankEl.textContent = `${rank}위`;
+
+    const name = document.createElement('span');
+    name.className = 'hof-name';
+    name.textContent = entry.name;
+
+    const hearts = document.createElement('span');
+    hearts.className = 'hof-hearts';
+    for (let h = 0; h < MAX_HP; h++) {
+      const im = document.createElement('img');
+      im.src = imgNames.heart;
+      if (h >= entry.hp) im.classList.add('empty');
+      hearts.appendChild(im);
+    }
+
+    li.appendChild(rankEl);
+    li.appendChild(name);
+    li.appendChild(hearts);
+    return li;
+  }
+
+  // list: 정렬된 전체 기록. highlightId가 있으면 그 기록의 등수를 계산해
+  // 순위권(HOF_TOP_CUTOFF) 안이면 목록 안에서 노란색으로 강조하고,
+  // 순위권 밖이면 pinnedContainer에 빨간 테두리로 항상 보이게 고정한다.
+  function renderLeaderboard(container, list, highlightId, pinnedContainer) {
+    container.innerHTML = '';
+    if (pinnedContainer) {
+      pinnedContainer.innerHTML = '';
+      pinnedContainer.classList.add('hidden');
+    }
+    if (list.length === 0) {
+      const li = document.createElement('li');
+      li.className = 'hof-empty';
+      li.textContent = '아직 등록된 기록이 없습니다.';
+      container.appendChild(li);
+      return -1;
+    }
+    let myRank = -1;
+    list.forEach((entry, i) => {
+      const rank = i + 1;
+      const isMe = entry.id === highlightId;
+      if (isMe) myRank = rank;
+      container.appendChild(buildHofRow(entry, rank, isMe));
+    });
+    if (pinnedContainer && highlightId && myRank > HOF_TOP_CUTOFF) {
+      const myEntry = list.find(e => e.id === highlightId);
+      pinnedContainer.appendChild(buildHofRow(myEntry, myRank, true));
+      pinnedContainer.classList.remove('hidden');
+    }
+    return myRank;
+  }
+
+  function uniqueId() {
+    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  }
+
+  // ---- game state ----
+  const GROUND_Y = 545;      // y coordinate where player's feet stand
+  const PLAYER_SIZE = 92;
+  const POOP_SIZE = 58;
+  const PLAYER_SPEED = 380; // px/sec
+
+  let state = 'start'; // start | playing | lose | win
+  let player, poops, hp, elapsed, spawnTimer, spawnInterval, keys, hitFlash;
+
+  function resetGame() {
+    player = {
+      x: W / 2 - PLAYER_SIZE / 2,
+      y: GROUND_Y - PLAYER_SIZE,
+      w: PLAYER_SIZE,
+      h: PLAYER_SIZE,
+      dir: 'idle',
+    };
+    poops = [];
+    hp = MAX_HP;
+    elapsed = 0;
+    spawnTimer = 0;
+    spawnInterval = 1.1;
+    keys = { left: false, right: false };
+    hitFlash = 0;
+    renderHearts(hp);
+    document.getElementById('scoreBox').textContent = '시간: 0.0s';
+  }
+
+  function difficultyFactor() {
+    // ramps up over 45s then caps
+    return Math.min(elapsed / 45, 1);
+  }
+
+  function spawnPoop() {
+    const isHeal = Math.random() < 0.24;
+    const df = difficultyFactor();
+    const speed = (isHeal ? 150 : 190) + df * 260 + Math.random() * 60;
+    poops.push({
+      x: Math.random() * (W - POOP_SIZE),
+      y: -POOP_SIZE,
+      speed,
+      type: isHeal ? 'heal' : 'obstacle',
+    });
+  }
+
+  function update(dt) {
+    if (state !== 'playing') return;
+
+    elapsed += dt;
+    document.getElementById('scoreBox').textContent = `시간: ${elapsed.toFixed(1)}s`;
+
+    if (elapsed >= WIN_TIME) {
+      triggerWin();
+      return;
+    }
+
+    // movement
+    let moving = false;
+    if (keys.left && !keys.right) {
+      player.x -= PLAYER_SPEED * dt;
+      player.dir = 'left';
+      moving = true;
+    } else if (keys.right && !keys.left) {
+      player.x += PLAYER_SPEED * dt;
+      player.dir = 'right';
+      moving = true;
+    }
+    if (!moving) player.dir = 'idle';
+    player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+    // spawn
+    const df = difficultyFactor();
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnPoop();
+      spawnInterval = Math.max(0.38, 1.1 - df * 0.7);
+      spawnTimer = spawnInterval * (0.7 + Math.random() * 0.6);
+    }
+
+    // update poops
+    for (let i = poops.length - 1; i >= 0; i--) {
+      const p = poops[i];
+      p.y += p.speed * dt;
+
+      // collision (AABB)
+      if (
+        p.x < player.x + player.w &&
+        p.x + POOP_SIZE > player.x &&
+        p.y < player.y + player.h &&
+        p.y + POOP_SIZE > player.y
+      ) {
+        if (p.type === 'obstacle') {
+          hp = Math.max(0, hp - 1);
+          hitFlash = 0.25;
+          playHitSfx();
+        } else {
+          hp = Math.min(MAX_HP, hp + 1);
+          hitFlash = -0.25; // negative marks heal flash
+          playHealSfx();
+        }
+        renderHearts(hp);
+        poops.splice(i, 1);
+        if (hp <= 0) {
+          triggerLose();
+          return;
+        }
+        continue;
+      }
+
+      if (p.y > H + POOP_SIZE) {
+        poops.splice(i, 1);
+      }
+    }
+
+    if (hitFlash > 0) hitFlash = Math.max(0, hitFlash - dt);
+    if (hitFlash < 0) hitFlash = Math.min(0, hitFlash + dt);
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(images.bg, 0, 0, W, H);
+
+    // poops
+    for (const p of poops) {
+      const img = p.type === 'obstacle' ? images.obstacle : images.heal;
+      ctx.drawImage(img, p.x, p.y, POOP_SIZE, POOP_SIZE);
+    }
+
+    // player
+    let pImg = images.idle;
+    if (state === 'lose') pImg = images.die;
+    else if (state === 'win') pImg = images.win;
+    else if (player.dir === 'left') pImg = images.left;
+    else if (player.dir === 'right') pImg = images.right;
+
+    ctx.save();
+    if (hitFlash > 0) {
+      ctx.globalAlpha = 0.5 + 0.5 * Math.sin(hitFlash * 60);
+    }
+    ctx.drawImage(pImg, player.x, player.y, player.w, player.h);
+    ctx.restore();
+
+    if (hitFlash < 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.5, -hitFlash);
+      ctx.fillStyle = '#7CFC00';
+      ctx.beginPath();
+      ctx.ellipse(player.x + player.w / 2, player.y + player.h / 2, player.w * 0.8, player.h * 0.8, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  let lastTime = null;
+  function loop(ts) {
+    if (lastTime === null) lastTime = ts;
+    const dt = Math.min(0.05, (ts - lastTime) / 1000);
+    lastTime = ts;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function showOverlay(id) {
+    ['startScreen', 'loseScreen', 'winScreen', 'hofScreen'].forEach(s => {
+      document.getElementById(s).classList.toggle('hidden', s !== id);
+    });
+  }
+
+  function startGame() {
+    resetGame();
+    state = 'playing';
+    showOverlay(null);
+  }
+
+  function triggerLose() {
+    state = 'lose';
+    document.getElementById('loseTime').textContent = `버틴 시간: ${elapsed.toFixed(1)}초`;
+    showOverlay('loseScreen');
+  }
+
+  function triggerWin() {
+    state = 'win';
+    const entry = {
+      id: uniqueId(),
+      name: currentNickname || '익명',
+      hp,
+      date: Date.now(),
+    };
+    document.getElementById('winSummary').textContent = `버텨냈다! (남은 체력 ${hp}/${MAX_HP})`;
+    document.getElementById('winRankLine').textContent = '🏆 명예의 전당에 등록하는 중...';
+    document.getElementById('winHofList').innerHTML = '';
+    document.getElementById('winHofPinned').classList.add('hidden');
+    showOverlay('winScreen');
+
+    addToLeaderboard(entry).then(({ list, id }) => {
+      const myRank = renderLeaderboard(
+        document.getElementById('winHofList'),
+        list,
+        id,
+        document.getElementById('winHofPinned')
+      );
+      document.getElementById('winRankLine').textContent = `🏆 명예의 전당 ${myRank}위에 등록되었습니다!`;
+    });
+  }
+
+  // ---- input ----
+  window.addEventListener('keydown', (e) => {
+    if (['ArrowLeft', 'a', 'A'].includes(e.key)) keys.left = true;
+    if (['ArrowRight', 'd', 'D'].includes(e.key)) keys.right = true;
+  });
+  window.addEventListener('keyup', (e) => {
+    if (['ArrowLeft', 'a', 'A'].includes(e.key)) keys.left = false;
+    if (['ArrowRight', 'd', 'D'].includes(e.key)) keys.right = false;
+  });
+
+  function bindHold(el, onDown, onUp) {
+    el.addEventListener('mousedown', onDown);
+    el.addEventListener('touchstart', (e) => { e.preventDefault(); onDown(); }, { passive: false });
+    ['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(ev => el.addEventListener(ev, onUp));
+  }
+  bindHold(document.getElementById('btnLeft'), () => keys.left = true, () => keys.left = false);
+  bindHold(document.getElementById('btnRight'), () => keys.right = true, () => keys.right = false);
+
+  document.getElementById('muteBtn').addEventListener('click', () => {
+    unlockAudio();
+    setMuted(!muted);
+  });
+
+  const nicknameInput = document.getElementById('nicknameInput');
+  const nicknameWarning = document.getElementById('nicknameWarning');
+
+  function tryStart() {
+    const val = nicknameInput.value.trim();
+    if (!val) {
+      nicknameWarning.style.display = 'block';
+      nicknameInput.classList.remove('shake');
+      void nicknameInput.offsetWidth; // restart animation
+      nicknameInput.classList.add('shake');
+      nicknameInput.focus();
+      return;
+    }
+    currentNickname = val.slice(0, 10);
+    nicknameWarning.style.display = 'none';
+    startGame();
+  }
+
+  document.getElementById('startBtn').addEventListener('click', tryStart);
+  nicknameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') tryStart();
+  });
+  nicknameInput.addEventListener('input', () => {
+    if (nicknameInput.value.trim()) nicknameWarning.style.display = 'none';
+  });
+  document.getElementById('retryBtnLose').addEventListener('click', startGame);
+  document.getElementById('retryBtnWin').addEventListener('click', startGame);
+
+  document.getElementById('hofBtn').addEventListener('click', () => {
+    const hofListEl = document.getElementById('hofList');
+    hofListEl.innerHTML = '<li class="hof-empty">불러오는 중...</li>';
+    showOverlay('hofScreen');
+    loadLeaderboardAsync().then((list) => {
+      renderLeaderboard(hofListEl, list, null);
+    });
+  });
+  document.getElementById('hofBackBtn').addEventListener('click', () => {
+    showOverlay('startScreen');
+  });
+
+  // init dummy state so hearts render and draw() is safe before first game
+  keys = { left: false, right: false };
+  hp = MAX_HP;
+  poops = [];
+  hitFlash = 0;
+  player = {
+    x: W / 2 - PLAYER_SIZE / 2,
+    y: GROUND_Y - PLAYER_SIZE,
+    w: PLAYER_SIZE,
+    h: PLAYER_SIZE,
+    dir: 'idle',
+  };
+  renderHearts(hp);
+
+  loadImages(() => {
+    requestAnimationFrame(loop);
+  });
+})();
+</script>
+</body>
+</html>
