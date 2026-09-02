@@ -276,6 +276,16 @@ canvas {
     filter: grayscale(1);
 }
 
+.hof-wins {
+    flex-shrink: 0;
+    font-size: 11px;
+    opacity: 0.75;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    padding: 2px 8px;
+    white-space: nowrap;
+}
+
 .hof-item.rank-1 .hof-rank,
 .hof-item.rank-1 .hof-name {
     color: #ffd700;
@@ -310,6 +320,27 @@ canvas {
 .hof-pinned .hof-item {
     background: rgba(255, 60, 60, 0.25);
     box-shadow: 0 0 0 2px #ff4d4d inset;
+}
+
+#stageToast {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.85);
+    color: #fff;
+    font-size: 36px;
+    font-weight: bold;
+    text-shadow: 0 0 12px rgba(255, 80, 80, 0.9), 2px 2px 4px #000;
+    z-index: 15;
+    opacity: 0;
+    pointer-events: none;
+    white-space: nowrap;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+#stageToast.show {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
 }
 
 #touchControls {

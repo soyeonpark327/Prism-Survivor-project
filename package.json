@@ -2,7 +2,7 @@
   "name": "prism-survivor-project",
   "version": "1.0.0",
   "private": true,
-  "description": "똥 피하기 - 60초 생존 미니게임 (공유 명예의 전당 포함)",
+  "description": "똥 피하기 - 40초씩 3단계, 총 120초 생존 미니게임 (공유 명예의 전당 포함)",
   "scripts": {
     "start": "node server.js"
   },
@@ -10,6 +10,8 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.113.0",
+    "dotenv": "^17.4.2",
     "express": "^4.19.2"
   }
 }

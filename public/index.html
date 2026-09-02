@@ -13,8 +13,9 @@
   <div id="hud"></div>
   <div id="topRight">
     <button id="muteBtn" aria-label="음소거 켜기/끄기" title="음소거">🔊</button>
-    <div id="scoreBox">시간: 0.0s</div>
+    <div id="scoreBox">1단계 · 시간: 0.0s</div>
   </div>
+  <div id="stageToast"></div>
 
   <div id="touchControls">
     <button id="btnLeft">◀</button>
@@ -26,7 +27,8 @@
     <p>
       화살표(←/→) 또는 A/D로 이동하세요.<br>
       갈색 똥에 맞으면 체력이 줄고, 컬러 똥을 먹으면 체력이 늘어납니다.<br>
-      <b id="winTimeLabel">60</b>초를 버티면 승리!
+      <b id="stageTimeLabel">40</b>초씩 총 <b id="stageCountLabel">3</b>단계, 갈수록 더 어려워집니다!<br>
+      총 <b id="winTimeLabel">120</b>초를 모두 버티면 승리!
     </p>
     <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="10" autocomplete="off">
     <p id="nicknameWarning">닉네임을 입력해주세요!</p>
@@ -66,8 +68,39 @@
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  const WIN_TIME = 60; // seconds to survive for victory
+  const STAGE_TIME = 40;   // seconds per stage
+  const STAGE_COUNT = 3;   // total stages
+  const WIN_TIME = STAGE_TIME * STAGE_COUNT; // seconds to survive for victory
   const MAX_HP = 5;
+
+  // 단계가 올라갈수록 더 빠르고, 더 자주 쏟아지고, 회복은 덜 나온다.
+  const STAGES = [
+    { // 1단계: 0~40s — 기존 난이도와 비슷한 도입부
+      obstacleSpeedBase: 190, obstacleSpeedRamp: 210,
+      healSpeedBase: 150, healSpeedRamp: 110,
+      healChance: 0.26,
+      spawnIntervalBase: 1.10, spawnIntervalMin: 0.50, spawnRamp: 0.55,
+      doubleSpawnChance: 0,
+    },
+    { // 2단계: 40~80s — 눈에 띄게 빡세짐
+      obstacleSpeedBase: 260, obstacleSpeedRamp: 260,
+      healSpeedBase: 170, healSpeedRamp: 120,
+      healChance: 0.19,
+      spawnIntervalBase: 0.82, spawnIntervalMin: 0.34, spawnRamp: 0.50,
+      doubleSpawnChance: 0.14,
+    },
+    { // 3단계: 80~120s — 최종 관문
+      obstacleSpeedBase: 330, obstacleSpeedRamp: 300,
+      healSpeedBase: 190, healSpeedRamp: 120,
+      healChance: 0.13,
+      spawnIntervalBase: 0.60, spawnIntervalMin: 0.24, spawnRamp: 0.42,
+      doubleSpawnChance: 0.30,
+    },
+  ];
+
+  function getStage(t) {
+    return Math.min(STAGE_COUNT - 1, Math.floor(t / STAGE_TIME));
+  }
 
   const imgNames = {
     bg: '배경.png',
@@ -287,11 +320,14 @@
   }
 
   document.getElementById('winTimeLabel').textContent = WIN_TIME;
+  document.getElementById('stageTimeLabel').textContent = STAGE_TIME;
+  document.getElementById('stageCountLabel').textContent = STAGE_COUNT;
 
   // ---- 명예의 전당 (hall of fame) ----
-  // 이 배포판(Render + Express 서버)에서는 실제 서버의 /api/leaderboard 를 통해
-  // 모든 방문자가 같은 순위표를 공유한다. 네트워크 문제 등으로 서버 요청이
-  // 실패하면 이 브라우저의 localStorage에만 저장하는 방식으로 조용히 대체된다.
+  // 서버가 Supabase(Postgres)에 닉네임별 "누적 최고 기록"을 장기 저장하고,
+  // /api/leaderboard 를 통해 모든 방문자가 같은 순위표를 공유한다.
+  // 네트워크 문제 등으로 서버 요청이 실패하면 이 브라우저의 localStorage에만
+  // 저장하는 방식으로 조용히 대체된다 (다른 사람과는 공유되지 않는 임시 기록).
   const LB_KEY = 'poopDodge_hallOfFame';
   const LB_API = '/api/leaderboard';
   let currentNickname = '';
@@ -309,15 +345,28 @@
     try { localStorage.setItem(LB_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
   }
 
-  const HOF_STORAGE_CAP = 500; // 저장 상한 (사실상 전체 기록 보존용 안전장치)
-  const HOF_TOP_CUTOFF = 10;   // 이 등수 안에 들면 목록 안에서만 강조, 밖이면 하단에 고정 표시
+  const HOF_TOP_CUTOFF = 10; // 이 등수 안에 들면 목록 안에서만 강조, 밖이면 하단에 고정 표시
 
-  function sortAndCap(list) {
-    list.sort((a, b) => {
+  function sortEntries(list) {
+    return [...list].sort((a, b) => {
       if (b.hp !== a.hp) return b.hp - a.hp;
       return a.date - b.date;
     });
-    return list.slice(0, HOF_STORAGE_CAP);
+  }
+
+  // 닉네임별 최고 기록만 남기는 로컬(오프라인) upsert. 서버의 upsert_leaderboard
+  // 함수와 동일한 규칙: 승수는 항상 +1, 최고 체력 기록은 갱신될 때만 교체.
+  function upsertLocal(list, name, hp) {
+    const now = Date.now();
+    const idx = list.findIndex((e) => e.name === name);
+    if (idx === -1) {
+      list.push({ name, hp, wins: 1, date: now });
+    } else {
+      const e = list[idx];
+      e.wins += 1;
+      if (hp > e.hp) { e.hp = hp; e.date = now; }
+    }
+    return list;
   }
 
   async function loadLeaderboardAsync() {
@@ -325,26 +374,27 @@
       const res = await fetch(LB_API, { cache: 'no-store' });
       if (res.ok) return await res.json();
     } catch (e) { /* 서버 요청 실패 -> 로컬로 폴백 */ }
-    return loadLeaderboard();
+    return sortEntries(loadLeaderboard());
   }
 
-  // 서버에 등록 시도 -> 성공하면 {list, id}(서버가 부여한 id)를 반환.
-  // 실패하면 이 브라우저의 localStorage에만 저장하고 클라이언트가 만든 id를 쓴다.
-  async function addToLeaderboard(entry) {
+  // 서버에 등록 시도 -> 성공하면 {list, rank}를 반환.
+  // 실패하면 이 브라우저의 localStorage에만 닉네임 기준으로 upsert한다.
+  async function addToLeaderboard(name, hp) {
     try {
       const res = await fetch(LB_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: entry.name, hp: entry.hp }),
+        body: JSON.stringify({ name, hp }),
       });
       if (res.ok) {
         const data = await res.json();
-        return { list: data.list, id: data.id };
+        return { list: data.list, rank: data.rank };
       }
     } catch (e) { /* 서버 요청 실패 -> 로컬로 폴백 */ }
-    const localList = sortAndCap([...loadLeaderboard(), entry]);
+    const localList = sortEntries(upsertLocal(loadLeaderboard(), name, hp));
     saveLeaderboard(localList);
-    return { list: localList, id: entry.id };
+    const rank = localList.findIndex((e) => e.name === name) + 1;
+    return { list: localList, rank };
   }
 
   function medalClass(rank) {
@@ -378,13 +428,19 @@
     li.appendChild(rankEl);
     li.appendChild(name);
     li.appendChild(hearts);
+    if (entry.wins > 1) {
+      const wins = document.createElement('span');
+      wins.className = 'hof-wins';
+      wins.textContent = `${entry.wins}승 누적`;
+      li.appendChild(wins);
+    }
     return li;
   }
 
-  // list: 정렬된 전체 기록. highlightId가 있으면 그 기록의 등수를 계산해
-  // 순위권(HOF_TOP_CUTOFF) 안이면 목록 안에서 노란색으로 강조하고,
-  // 순위권 밖이면 pinnedContainer에 빨간 테두리로 항상 보이게 고정한다.
-  function renderLeaderboard(container, list, highlightId, pinnedContainer) {
+  // list: 정렬된 전체 기록 (닉네임별 누적 최고 기록). highlightName이 있으면
+  // 그 닉네임의 등수를 계산해 순위권(HOF_TOP_CUTOFF) 안이면 목록 안에서 노란색으로
+  // 강조하고, 순위권 밖이면 pinnedContainer에 빨간 테두리로 항상 보이게 고정한다.
+  function renderLeaderboard(container, list, highlightName, pinnedContainer) {
     container.innerHTML = '';
     if (pinnedContainer) {
       pinnedContainer.innerHTML = '';
@@ -400,20 +456,16 @@
     let myRank = -1;
     list.forEach((entry, i) => {
       const rank = i + 1;
-      const isMe = entry.id === highlightId;
+      const isMe = entry.name === highlightName;
       if (isMe) myRank = rank;
       container.appendChild(buildHofRow(entry, rank, isMe));
     });
-    if (pinnedContainer && highlightId && myRank > HOF_TOP_CUTOFF) {
-      const myEntry = list.find(e => e.id === highlightId);
+    if (pinnedContainer && highlightName && myRank > HOF_TOP_CUTOFF) {
+      const myEntry = list.find(e => e.name === highlightName);
       pinnedContainer.appendChild(buildHofRow(myEntry, myRank, true));
       pinnedContainer.classList.remove('hidden');
     }
     return myRank;
-  }
-
-  function uniqueId() {
-    return `${Date.now()}_${Math.random().toString(36).slice(2)}`;
   }
 
   // ---- game state ----
@@ -423,7 +475,8 @@
   const PLAYER_SPEED = 380; // px/sec
 
   let state = 'start'; // start | playing | lose | win
-  let player, poops, hp, elapsed, spawnTimer, spawnInterval, keys, hitFlash;
+  let player, poops, hp, elapsed, spawnTimer, spawnInterval, keys, hitFlash, shownStage;
+  let stageToastTimer = null;
 
   function resetGame() {
     player = {
@@ -440,19 +493,35 @@
     spawnInterval = 1.1;
     keys = { left: false, right: false };
     hitFlash = 0;
+    shownStage = 0;
     renderHearts(hp);
-    document.getElementById('scoreBox').textContent = '시간: 0.0s';
+    document.getElementById('scoreBox').textContent = '1단계 · 시간: 0.0s';
+    const toast = document.getElementById('stageToast');
+    toast.classList.remove('show');
+    if (stageToastTimer) { clearTimeout(stageToastTimer); stageToastTimer = null; }
   }
 
   function difficultyFactor() {
-    // ramps up over 45s then caps
-    return Math.min(elapsed / 45, 1);
+    // ramps up over the current stage's 40s, then caps at 1
+    const stage = getStage(elapsed);
+    const stageElapsed = elapsed - stage * STAGE_TIME;
+    return Math.min(stageElapsed / STAGE_TIME, 1);
   }
 
-  function spawnPoop() {
-    const isHeal = Math.random() < 0.24;
-    const df = difficultyFactor();
-    const speed = (isHeal ? 150 : 190) + df * 260 + Math.random() * 60;
+  function showStageToast(stageNumber) {
+    const toast = document.getElementById('stageToast');
+    toast.textContent = `⚠ ${stageNumber}단계 시작! ⚠`;
+    toast.classList.add('show');
+    if (stageToastTimer) clearTimeout(stageToastTimer);
+    stageToastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+    speak(`${stageNumber}단계 시작!`, { pitch: 1.0, rate: 1.1 });
+  }
+
+  function spawnOnePoop(cfg, df) {
+    const isHeal = Math.random() < cfg.healChance;
+    const base = isHeal ? cfg.healSpeedBase : cfg.obstacleSpeedBase;
+    const ramp = isHeal ? cfg.healSpeedRamp : cfg.obstacleSpeedRamp;
+    const speed = base + df * ramp + Math.random() * 50;
     poops.push({
       x: Math.random() * (W - POOP_SIZE),
       y: -POOP_SIZE,
@@ -461,11 +530,25 @@
     });
   }
 
+  function spawnPoop() {
+    const cfg = STAGES[getStage(elapsed)];
+    const df = difficultyFactor();
+    spawnOnePoop(cfg, df);
+    if (Math.random() < cfg.doubleSpawnChance) {
+      spawnOnePoop(cfg, df);
+    }
+  }
+
   function update(dt) {
     if (state !== 'playing') return;
 
     elapsed += dt;
-    document.getElementById('scoreBox').textContent = `시간: ${elapsed.toFixed(1)}s`;
+    const stage = getStage(elapsed);
+    if (stage !== shownStage) {
+      shownStage = stage;
+      showStageToast(stage + 1);
+    }
+    document.getElementById('scoreBox').textContent = `${stage + 1}단계 · 시간: ${elapsed.toFixed(1)}s`;
 
     if (elapsed >= WIN_TIME) {
       triggerWin();
@@ -487,11 +570,12 @@
     player.x = Math.max(0, Math.min(W - player.w, player.x));
 
     // spawn
+    const cfg = STAGES[stage];
     const df = difficultyFactor();
     spawnTimer -= dt;
     if (spawnTimer <= 0) {
       spawnPoop();
-      spawnInterval = Math.max(0.38, 1.1 - df * 0.7);
+      spawnInterval = Math.max(cfg.spawnIntervalMin, cfg.spawnIntervalBase - df * cfg.spawnRamp);
       spawnTimer = spawnInterval * (0.7 + Math.random() * 0.6);
     }
 
@@ -599,26 +683,21 @@
 
   function triggerWin() {
     state = 'win';
-    const entry = {
-      id: uniqueId(),
-      name: currentNickname || '익명',
-      hp,
-      date: Date.now(),
-    };
+    const name = currentNickname || '익명';
     document.getElementById('winSummary').textContent = `버텨냈다! (남은 체력 ${hp}/${MAX_HP})`;
     document.getElementById('winRankLine').textContent = '🏆 명예의 전당에 등록하는 중...';
     document.getElementById('winHofList').innerHTML = '';
     document.getElementById('winHofPinned').classList.add('hidden');
     showOverlay('winScreen');
 
-    addToLeaderboard(entry).then(({ list, id }) => {
+    addToLeaderboard(name, hp).then(({ list }) => {
       const myRank = renderLeaderboard(
         document.getElementById('winHofList'),
         list,
-        id,
+        name,
         document.getElementById('winHofPinned')
       );
-      document.getElementById('winRankLine').textContent = `🏆 명예의 전당 ${myRank}위에 등록되었습니다!`;
+      document.getElementById('winRankLine').textContent = `🏆 명예의 전당 ${myRank}위에 등록되었습니다! (닉네임별 누적 최고 기록 기준)`;
     });
   }
 
