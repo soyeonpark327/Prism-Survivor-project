@@ -471,8 +471,10 @@
   // ---- game state ----
   const GROUND_Y = 578;      // y coordinate where player's feet stand
   const PLAYER_SIZE = 92;
-  const POOP_SIZE = 75;
-  const PLAYER_SPEED = 380; // px/sec
+  const POOP_SIZE = 75;       // 스프라이트로 그려지는 실제 크기 (그대로 유지)
+  const POOP_HITBOX = 48;     // 충돌 판정 크기 (스프라이트보다 작게 잡아서 체감 판정을 관대하게)
+  const POOP_HITBOX_INSET = (POOP_SIZE - POOP_HITBOX) / 2;
+  const PLAYER_SPEED = 430; // px/sec
 
   let state = 'start'; // start | playing | lose | win
   let player, poops, hp, elapsed, spawnTimer, spawnInterval, keys, hitFlash, shownStage;
@@ -584,12 +586,12 @@
       const p = poops[i];
       p.y += p.speed * dt;
 
-      // collision (AABB)
+      // collision (AABB) — 판정은 그려지는 크기보다 작은 히트박스로 체크
       if (
-        p.x < player.x + player.w &&
-        p.x + POOP_SIZE > player.x &&
-        p.y < player.y + player.h &&
-        p.y + POOP_SIZE > player.y
+        p.x + POOP_HITBOX_INSET < player.x + player.w &&
+        p.x + POOP_SIZE - POOP_HITBOX_INSET > player.x &&
+        p.y + POOP_HITBOX_INSET < player.y + player.h &&
+        p.y + POOP_SIZE - POOP_HITBOX_INSET > player.y
       ) {
         if (p.type === 'obstacle') {
           hp = Math.max(0, hp - 1);

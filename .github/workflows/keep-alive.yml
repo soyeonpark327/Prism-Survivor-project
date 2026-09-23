@@ -1,0 +1,19 @@
+name: Keep-alive ping
+
+# Render 무료 플랜은 15분간 요청이 없으면 서버가 잠들고(다음 요청이 느려짐),
+# Supabase 무료 플랜은 7일간 API 요청이 없으면 프로젝트 자체가 일시정지됩니다.
+# 10분마다 사이트를 깨워서 두 가지를 모두 방지합니다.
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping 똥 피하기 서버
+        run: |
+          curl -sf --max-time 40 "https://prism-survivor-project.onrender.com/api/leaderboard" > /dev/null \
+            && echo "OK: 서버 응답함" \
+            || echo "응답 실패 (서버가 지금 막 깨어나는 중일 수 있음, 다음 핑에서 재시도됨)"
