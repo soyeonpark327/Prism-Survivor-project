@@ -27,8 +27,8 @@
     <p>
       화살표(←/→) 또는 A/D로 이동하세요.<br>
       갈색 똥에 맞으면 체력이 줄고, 컬러 똥을 먹으면 체력이 늘어납니다.<br>
-      <b id="stageTimeLabel">40</b>초씩 총 <b id="stageCountLabel">3</b>단계, 갈수록 더 어려워집니다!<br>
-      총 <b id="winTimeLabel">120</b>초를 모두 버티면 승리!
+      <b id="stageTimeLabel">30</b>초씩 총 <b id="stageCountLabel">3</b>단계, 갈수록 더 어려워집니다!<br>
+      총 <b id="winTimeLabel">90</b>초를 모두 버티면 승리!
     </p>
     <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="10" autocomplete="off">
     <p id="nicknameWarning">닉네임을 입력해주세요!</p>
@@ -68,33 +68,34 @@
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  const STAGE_TIME = 40;   // seconds per stage
+  const STAGE_TIME = 30;   // seconds per stage (단계당 40s -> 30s로 단축, 루즈함 줄임)
   const STAGE_COUNT = 3;   // total stages
   const WIN_TIME = STAGE_TIME * STAGE_COUNT; // seconds to survive for victory
   const MAX_HP = 5;
 
   // 단계가 올라갈수록 더 빠르고, 더 자주 쏟아지고, 회복은 덜 나온다.
+  // 2, 3단계는 체감 난이도를 크게 올림.
   const STAGES = [
-    { // 1단계: 0~40s — 기존 난이도와 비슷한 도입부
+    { // 1단계: 0~30s — 도입부 (기존과 비슷)
       obstacleSpeedBase: 190, obstacleSpeedRamp: 210,
       healSpeedBase: 150, healSpeedRamp: 110,
       healChance: 0.26,
       spawnIntervalBase: 1.10, spawnIntervalMin: 0.50, spawnRamp: 0.55,
       doubleSpawnChance: 0,
     },
-    { // 2단계: 40~80s — 눈에 띄게 빡세짐
-      obstacleSpeedBase: 260, obstacleSpeedRamp: 260,
-      healSpeedBase: 170, healSpeedRamp: 120,
-      healChance: 0.19,
-      spawnIntervalBase: 0.82, spawnIntervalMin: 0.34, spawnRamp: 0.50,
-      doubleSpawnChance: 0.14,
+    { // 2단계: 30~60s — 확실히 더 빡세짐
+      obstacleSpeedBase: 300, obstacleSpeedRamp: 300,
+      healSpeedBase: 180, healSpeedRamp: 130,
+      healChance: 0.15,
+      spawnIntervalBase: 0.75, spawnIntervalMin: 0.28, spawnRamp: 0.55,
+      doubleSpawnChance: 0.22,
     },
-    { // 3단계: 80~120s — 최종 관문
-      obstacleSpeedBase: 330, obstacleSpeedRamp: 300,
-      healSpeedBase: 190, healSpeedRamp: 120,
-      healChance: 0.13,
-      spawnIntervalBase: 0.60, spawnIntervalMin: 0.24, spawnRamp: 0.42,
-      doubleSpawnChance: 0.30,
+    { // 3단계: 60~90s — 최종 관문, 전작 대비 대폭 강화
+      obstacleSpeedBase: 400, obstacleSpeedRamp: 360,
+      healSpeedBase: 200, healSpeedRamp: 140,
+      healChance: 0.10,
+      spawnIntervalBase: 0.55, spawnIntervalMin: 0.18, spawnRamp: 0.45,
+      doubleSpawnChance: 0.38,
     },
   ];
 
@@ -472,8 +473,11 @@
   const GROUND_Y = 578;      // y coordinate where player's feet stand
   const PLAYER_SIZE = 92;
   const POOP_SIZE = 75;       // 스프라이트로 그려지는 실제 크기 (그대로 유지)
-  const POOP_HITBOX = 48;     // 충돌 판정 크기 (스프라이트보다 작게 잡아서 체감 판정을 관대하게)
-  const POOP_HITBOX_INSET = (POOP_SIZE - POOP_HITBOX) / 2;
+  // 이미지 자체를 투명 여백 없이 꽉 차게 잘라냈으므로, 판정도 실제 그림 크기에 맞춰 타이트하게.
+  const POOP_HITBOX_W = 62;
+  const POOP_HITBOX_H = 52;
+  const POOP_HITBOX_INSET_X = (POOP_SIZE - POOP_HITBOX_W) / 2;
+  const POOP_HITBOX_INSET_Y = (POOP_SIZE - POOP_HITBOX_H) / 2;
   const PLAYER_SPEED = 430; // px/sec
 
   let state = 'start'; // start | playing | lose | win
@@ -588,10 +592,10 @@
 
       // collision (AABB) — 판정은 그려지는 크기보다 작은 히트박스로 체크
       if (
-        p.x + POOP_HITBOX_INSET < player.x + player.w &&
-        p.x + POOP_SIZE - POOP_HITBOX_INSET > player.x &&
-        p.y + POOP_HITBOX_INSET < player.y + player.h &&
-        p.y + POOP_SIZE - POOP_HITBOX_INSET > player.y
+        p.x + POOP_HITBOX_INSET_X < player.x + player.w &&
+        p.x + POOP_SIZE - POOP_HITBOX_INSET_X > player.x &&
+        p.y + POOP_HITBOX_INSET_Y < player.y + player.h &&
+        p.y + POOP_SIZE - POOP_HITBOX_INSET_Y > player.y
       ) {
         if (p.type === 'obstacle') {
           hp = Math.max(0, hp - 1);
