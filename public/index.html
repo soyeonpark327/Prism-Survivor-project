@@ -42,7 +42,10 @@
     <h1>게임 오버</h1>
     <img src="cutout/플레이어(die).png" alt="die">
     <p id="loseTime"></p>
-    <button id="retryBtnLose">다시 시작</button>
+    <div class="btnRow">
+      <button id="retryBtnLose">다시 시작</button>
+      <button id="homeBtnLose" class="secondary">🏠 메인으로</button>
+    </div>
   </div>
 
   <div class="overlay hidden" id="winScreen">
@@ -52,7 +55,10 @@
     <p id="winRankLine" style="font-size:13px; opacity:0.8; margin-top:-10px;"></p>
     <ol class="hof-list" id="winHofList"></ol>
     <ul class="hof-list hof-pinned hidden" id="winHofPinned"></ul>
-    <button id="retryBtnWin">다시 시작</button>
+    <div class="btnRow">
+      <button id="retryBtnWin">다시 시작</button>
+      <button id="homeBtnWin" class="secondary">🏠 메인으로</button>
+    </div>
   </div>
 
   <div class="overlay hidden" id="hofScreen">
@@ -79,7 +85,7 @@
     { // 1단계: 0~30s — 도입부 (기존과 비슷)
       obstacleSpeedBase: 190, obstacleSpeedRamp: 210,
       healSpeedBase: 150, healSpeedRamp: 110,
-      healChance: 0.26,
+      healChance: 0.20,
       spawnIntervalBase: 1.10, spawnIntervalMin: 0.50, spawnRamp: 0.55,
       doubleSpawnChance: 0,
     },
@@ -472,12 +478,12 @@
   // ---- game state ----
   const GROUND_Y = 578;      // y coordinate where player's feet stand
   const PLAYER_SIZE = 92;
-  const POOP_SIZE = 75;       // 스프라이트로 그려지는 실제 크기 (그대로 유지)
+  const POOP_SIZE = 75;       // 똥 최대 크기 (기존 크기)
+  const POOP_MIN_SIZE = 42;   // 똥 최소 크기 — 똥마다 이 사이에서 무작위
   // 이미지 자체를 투명 여백 없이 꽉 차게 잘라냈으므로, 판정도 실제 그림 크기에 맞춰 타이트하게.
-  const POOP_HITBOX_W = 62;
-  const POOP_HITBOX_H = 52;
-  const POOP_HITBOX_INSET_X = (POOP_SIZE - POOP_HITBOX_W) / 2;
-  const POOP_HITBOX_INSET_Y = (POOP_SIZE - POOP_HITBOX_H) / 2;
+  // 히트박스는 똥 크기에 비례해서 같이 줄어든다 (75px 기준 62x52).
+  const POOP_HITBOX_RATIO_W = 62 / 75;
+  const POOP_HITBOX_RATIO_H = 52 / 75;
   const PLAYER_SPEED = 430; // px/sec
 
   let state = 'start'; // start | playing | lose | win
@@ -528,9 +534,13 @@
     const base = isHeal ? cfg.healSpeedBase : cfg.obstacleSpeedBase;
     const ramp = isHeal ? cfg.healSpeedRamp : cfg.obstacleSpeedRamp;
     const speed = base + df * ramp + Math.random() * 50;
+    const size = POOP_MIN_SIZE + Math.random() * (POOP_SIZE - POOP_MIN_SIZE);
     poops.push({
-      x: Math.random() * (W - POOP_SIZE),
-      y: -POOP_SIZE,
+      x: Math.random() * (W - size),
+      y: -size,
+      size,
+      insetX: size * (1 - POOP_HITBOX_RATIO_W) / 2,
+      insetY: size * (1 - POOP_HITBOX_RATIO_H) / 2,
       speed,
       type: isHeal ? 'heal' : 'obstacle',
     });
@@ -592,10 +602,10 @@
 
       // collision (AABB) — 판정은 그려지는 크기보다 작은 히트박스로 체크
       if (
-        p.x + POOP_HITBOX_INSET_X < player.x + player.w &&
-        p.x + POOP_SIZE - POOP_HITBOX_INSET_X > player.x &&
-        p.y + POOP_HITBOX_INSET_Y < player.y + player.h &&
-        p.y + POOP_SIZE - POOP_HITBOX_INSET_Y > player.y
+        p.x + p.insetX < player.x + player.w &&
+        p.x + p.size - p.insetX > player.x &&
+        p.y + p.insetY < player.y + player.h &&
+        p.y + p.size - p.insetY > player.y
       ) {
         if (p.type === 'obstacle') {
           hp = Math.max(0, hp - 1);
@@ -615,7 +625,7 @@
         continue;
       }
 
-      if (p.y > H + POOP_SIZE) {
+      if (p.y > H + p.size) {
         poops.splice(i, 1);
       }
     }
@@ -631,7 +641,7 @@
     // poops
     for (const p of poops) {
       const img = p.type === 'obstacle' ? images.obstacle : images.heal;
-      ctx.drawImage(img, p.x, p.y, POOP_SIZE, POOP_SIZE);
+      ctx.drawImage(img, p.x, p.y, p.size, p.size);
     }
 
     // player
@@ -757,6 +767,17 @@
   });
   document.getElementById('retryBtnLose').addEventListener('click', startGame);
   document.getElementById('retryBtnWin').addEventListener('click', startGame);
+
+  function goHome() {
+    state = 'start';
+    poops = [];
+    hp = MAX_HP;
+    hitFlash = 0;
+    renderHearts(hp);
+    showOverlay('startScreen');
+  }
+  document.getElementById('homeBtnLose').addEventListener('click', goHome);
+  document.getElementById('homeBtnWin').addEventListener('click', goHome);
 
   document.getElementById('hofBtn').addEventListener('click', () => {
     const hofListEl = document.getElementById('hofList');
