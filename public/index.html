@@ -27,8 +27,8 @@
     <p>
       화살표(←/→) 또는 A/D로 이동하세요.<br>
       갈색 똥에 맞으면 체력이 줄고, 컬러 똥을 먹으면 체력이 늘어납니다.<br>
-      <b id="stageTimeLabel">30</b>초씩 총 <b id="stageCountLabel">3</b>단계, 갈수록 더 어려워집니다!<br>
-      총 <b id="winTimeLabel">90</b>초를 모두 버티면 승리!
+      <b id="stageTimeLabel">20</b>초씩 총 <b id="stageCountLabel">3</b>단계, 갈수록 더 어려워집니다!<br>
+      총 <b id="winTimeLabel">60</b>초를 모두 버티면 승리!
     </p>
     <input type="text" id="nicknameInput" placeholder="닉네임을 입력하세요" maxlength="10" autocomplete="off">
     <p id="nicknameWarning">닉네임을 입력해주세요!</p>
@@ -74,32 +74,33 @@
   const ctx = canvas.getContext('2d');
   const W = canvas.width, H = canvas.height;
 
-  const STAGE_TIME = 30;   // seconds per stage (단계당 40s -> 30s로 단축, 루즈함 줄임)
+  const STAGE_TIME = 20;   // seconds per stage (단계당 30s -> 20s로 단축, 루즈함 줄임)
   const STAGE_COUNT = 3;   // total stages
   const WIN_TIME = STAGE_TIME * STAGE_COUNT; // seconds to survive for victory
   const MAX_HP = 5;
 
   // 단계가 올라갈수록 더 빠르고, 더 자주 쏟아지고, 회복은 덜 나온다.
-  // 2, 3단계는 체감 난이도를 크게 올림.
+  // 2, 3단계는 체감 난이도를 크게 올림. 모든 단계 속도는 이전 대비 30% 상향.
+  // 3단계는 무지개똥(회복) 없음.
   const STAGES = [
-    { // 1단계: 0~30s — 도입부 (기존과 비슷)
-      obstacleSpeedBase: 190, obstacleSpeedRamp: 210,
-      healSpeedBase: 150, healSpeedRamp: 110,
-      healChance: 0.15,
+    { // 1단계: 0~20s — 도입부
+      obstacleSpeedBase: 247, obstacleSpeedRamp: 273,
+      healSpeedBase: 195, healSpeedRamp: 143,
+      healChance: 0.07,
       spawnIntervalBase: 1.10, spawnIntervalMin: 0.50, spawnRamp: 0.55,
       doubleSpawnChance: 0,
     },
-    { // 2단계: 30~60s — 확실히 더 빡세짐
-      obstacleSpeedBase: 300, obstacleSpeedRamp: 300,
-      healSpeedBase: 180, healSpeedRamp: 130,
-      healChance: 0.10,
+    { // 2단계: 20~40s — 확실히 더 빡세짐
+      obstacleSpeedBase: 390, obstacleSpeedRamp: 390,
+      healSpeedBase: 234, healSpeedRamp: 169,
+      healChance: 0.04,
       spawnIntervalBase: 0.75, spawnIntervalMin: 0.28, spawnRamp: 0.55,
       doubleSpawnChance: 0.22,
     },
-    { // 3단계: 60~90s — 최종 관문, 전작 대비 대폭 강화
-      obstacleSpeedBase: 400, obstacleSpeedRamp: 360,
-      healSpeedBase: 200, healSpeedRamp: 140,
-      healChance: 0.07,
+    { // 3단계: 40~60s — 최종 관문, 회복 없음
+      obstacleSpeedBase: 520, obstacleSpeedRamp: 468,
+      healSpeedBase: 260, healSpeedRamp: 182,
+      healChance: 0,
       spawnIntervalBase: 0.55, spawnIntervalMin: 0.18, spawnRamp: 0.45,
       doubleSpawnChance: 0.38,
     },
@@ -514,7 +515,7 @@
   }
 
   function difficultyFactor() {
-    // ramps up over the current stage's 40s, then caps at 1
+    // ramps up over the current stage's STAGE_TIME, then caps at 1
     const stage = getStage(elapsed);
     const stageElapsed = elapsed - stage * STAGE_TIME;
     return Math.min(stageElapsed / STAGE_TIME, 1);
