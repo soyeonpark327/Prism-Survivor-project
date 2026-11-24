@@ -481,10 +481,10 @@
   // ---- game state ----
   const GROUND_Y = 578;      // y coordinate where player's feet stand
   const PLAYER_SIZE = 92;
-  const POOP_SIZE = 75;       // 똥 최대 크기 (기존 크기)
-  const POOP_MIN_SIZE = 42;   // 똥 최소 크기 — 똥마다 이 사이에서 무작위
+  const POOP_SIZE = 56;       // 똥 최대 크기 (75 -> 56, 약 25% 축소)
+  const POOP_MIN_SIZE = 32;   // 똥 최소 크기 (42 -> 32) — 똥마다 이 사이에서 무작위
   // 이미지 자체를 투명 여백 없이 꽉 차게 잘라냈으므로, 판정도 실제 그림 크기에 맞춰 타이트하게.
-  // 히트박스는 똥 크기에 비례해서 같이 줄어든다 (75px 기준 62x52).
+  // 히트박스는 똥 크기에 비례해서 같이 줄어든다 (그림 크기 대비 가로 62/75, 세로 52/75 비율).
   const POOP_HITBOX_RATIO_W = 62 / 75;
   const POOP_HITBOX_RATIO_H = 52 / 75;
   const PLAYER_SPEED = 602; // px/sec (860에서 30% 감소)
