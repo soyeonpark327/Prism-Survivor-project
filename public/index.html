@@ -81,7 +81,7 @@
 
   // 단계가 올라갈수록 더 빠르고, 더 자주 쏟아지고, 회복은 덜 나온다.
   // 2, 3단계는 체감 난이도를 크게 올림. 모든 단계 속도는 이전 대비 30% 상향.
-  // 3단계는 무지개똥(회복) 없음.
+  // 3단계 무지개똥(회복)은 1.2%로 아주 드물게.
   // 생성 간격은 화면에 동시에 떠 있는 똥이 대략 1단계 6~7개(이전 2~3개와 15~17개 사이 1/3 지점), 2단계 약 10개, 3단계 약 15개가 되도록 맞춤
   // (동시 개수 ≈ 초당 생성 수 × 화면을 떨어지는 데 걸리는 시간).
   const STAGES = [
@@ -99,10 +99,10 @@
       spawnIntervalBase: 0.200, spawnIntervalMin: 0.102, spawnRamp: 0.096,
       doubleSpawnChance: 0.22,
     },
-    { // 3단계: 40~60s — 최종 관문, 회복 없음
+    { // 3단계: 40~60s — 최종 관문, 회복 거의 없음
       obstacleSpeedBase: 520, obstacleSpeedRamp: 468,
       healSpeedBase: 260, healSpeedRamp: 182,
-      healChance: 0,
+      healChance: 0.012,
       spawnIntervalBase: 0.115, spawnIntervalMin: 0.062, spawnRamp: 0.053,
       doubleSpawnChance: 0.38,
     },
